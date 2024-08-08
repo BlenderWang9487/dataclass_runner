@@ -12,4 +12,4 @@ pip install typer
 
 ### ML model training script
 
-see ``
+see [example script](example_ml_model_training.py)

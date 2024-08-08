@@ -1,8 +1,8 @@
 from enum import Enum
 from pathlib import Path
+from typing import Annotated
 
 import typer
-from typing_extensions import Annotated
 
 from dataclass_runner import BaseConfig, check_conflicting_params, runner_dataclass
 

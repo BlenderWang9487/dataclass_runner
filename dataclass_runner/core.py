@@ -1,7 +1,7 @@
 import dataclasses
 import inspect
 from collections import defaultdict
-from typing import Union
+from typing import Any, Callable, Union
 
 
 class BaseConfig:
@@ -9,13 +9,8 @@ class BaseConfig:
     def from_config(cls, args_dict: Union[dict, "BaseConfig"]):
         if isinstance(args_dict, BaseConfig):
             args_dict = args_dict.__dict__
-        return cls(
-            **{
-                k: v
-                for k, v in args_dict.items()
-                if k in inspect.signature(cls).parameters
-            }
-        )
+        params = inspect.signature(cls).parameters
+        return cls(**{k: v for k, v in args_dict.items() if k in params})
 
 
 runner_dataclass = dataclasses.dataclass(kw_only=True)
@@ -43,3 +38,33 @@ def check_conflicting_params(cls=None, /, ignore_check_names: list[str] | None =
         return wrap
 
     return wrap(cls)
+
+
+class DataclassRunner:
+    def __init__(
+        self, app, callback: Callable[[BaseConfig], Any], name: str = None
+    ) -> None:
+        assert hasattr(
+            app, "command"
+        ), "app must have command wrapper method to wrap the runner_type"
+        self._app = app
+        self._callback = callback
+        if name is None:
+            name = callback.__name__
+        self._name = name
+
+    def __call__(self, runner_type):
+        assert dataclasses.is_dataclass(runner_type) and issubclass(
+            runner_type, BaseConfig
+        ), f"runner_type must be a dataclass and subclass of {BaseConfig}, got {runner_type}"
+
+        @dataclasses.dataclass
+        class BindType(runner_type):  # type: ignore
+            def __post_init__(bind_self):
+                parent = super()
+                if hasattr(parent, "__post_init__"):
+                    parent.__post_init__()
+                self._callback(runner_type.from_config(bind_self))
+
+        self._app.command(name=self._name)(BindType)
+        return runner_type

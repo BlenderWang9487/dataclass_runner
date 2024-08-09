@@ -1,1 +1,6 @@
-from .core import BaseConfig, check_conflicting_params, runner_dataclass
+from .core import (
+    BaseConfig,
+    DataclassRunner,
+    check_conflicting_params,
+    runner_dataclass,
+)

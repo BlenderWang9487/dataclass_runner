@@ -4,7 +4,12 @@ from typing import Annotated
 
 import typer
 
-from dataclass_runner import BaseConfig, check_conflicting_params, runner_dataclass
+from dataclass_runner import (
+    BaseConfig,
+    DataclassRunner,
+    check_conflicting_params,
+    runner_dataclass,
+)
 
 app = typer.Typer()
 
@@ -40,18 +45,10 @@ class TrainConfig(BaseConfig):
     epochs: int = 10
 
 
-# because runner_dataclass specify kw_only=True, so even if we have multiple
-#   positional arguments in different parent class that don't have default values,
-#   it will not break the __init__ method of Args
-# check_conflicting_params is used to check if there are conflicting parameters in the
-#   parent classes. It will raise an error if there are conflicting parameters. but
-#   you can ignore some parameters (if you know what you are doing) by passing them in ignore_check_names
-@app.command()
-@check_conflicting_params(ignore_check_names=["n_layers"])
 @runner_dataclass
-class Args(TrainConfig, ModelConfig):
-    def __post_init__(self):
-        main(self)
+class RLTrainConfig(TrainConfig):
+    exploration_rate: float = 0.1
+    max_episode: int = 10
 
 
 class Model:
@@ -75,7 +72,23 @@ class Trainer:
         print(f"Log file: {self.log_file_name}")
 
 
-def main(args: Args):
+class RLTrainer:
+    def __init__(self, train_config: RLTrainConfig):
+        self.train_config = train_config
+        self.log_file_name = train_config.log_dir / f"{train_config.run_name}.log"
+
+    def train(self, model: Model):
+        print(f"Training for {self.train_config.epochs} epochs")
+        for i in range(self.train_config.epochs):
+            print(f"Epoch {i + 1}: {model.layers}")
+            for e in range(self.train_config.max_episode):
+                print(
+                    f"Episode {e + 1}: Exploration rate {self.train_config.exploration_rate}"
+                )
+        print(f"Log file: {self.log_file_name}")
+
+
+def main(args: "MainArgs"):
     # so this can be used with intellisense and auto-completion
     # which argparser cannot do
     # and compare to typer-only
@@ -100,12 +113,51 @@ def main(args: Args):
     trainer.train(model)
 
 
+# because runner_dataclass specify kw_only=True, so even if we have multiple
+#   positional arguments in different parent class that don't have default values,
+#   it will not break the __init__ method of Args
+# check_conflicting_params is used to check if there are conflicting parameters in the
+#   parent classes. It will raise an error if there are conflicting parameters. but
+#   you can ignore some parameters (if you know what you are doing) by passing them in ignore_check_names
+@DataclassRunner(app, callback=main)
+@check_conflicting_params(ignore_check_names=["n_layers"])
+@runner_dataclass
+class MainArgs(TrainConfig, ModelConfig):
+    pass
+
+
+# demonstrate how to reuse the same dataclass for different runner
+def rl_main(args: "RLMainArgs"):
+    print(args)
+
+    m = ModelConfig.from_config(args)
+    print(m)
+
+    t = RLTrainConfig.from_config(args)
+    print(t)
+
+    model = Model(m)
+    trainer = RLTrainer(t)
+    trainer.train(model)
+
+
+@DataclassRunner(app, callback=rl_main)
+@check_conflicting_params(ignore_check_names=["n_layers"])
+@runner_dataclass
+class RLMainArgs(RLTrainConfig, ModelConfig):
+    pass
+
+
 if __name__ == "__main__":
     # run:
     #    python ./example_ml_model_training.py --help
-    # to see the help message
+    # to see the help message of two commands (rl_main and main)
 
     # run:
-    #    python ./example_ml_model_training.py my_AGI_model run1 --log-dir ./logs --n-layers 4 --d-model 2
-    # to see the output
+    #    python ./example_ml_model_training.py main my_AGI_model run1 --log-dir ./logs --n-layers 4 --d-model 2
+    # to see the output of main
+
+    # run:
+    #    python ./example_ml_model_training.py rl_main my_AGI_model run1 --log-dir ./logs --n-layers 4 --d-model 2 --exploration-rate 0.2 --epochs 2
+    # to see the output of rl_main
     app()

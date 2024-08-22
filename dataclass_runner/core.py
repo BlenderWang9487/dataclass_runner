@@ -42,7 +42,7 @@ def check_conflicting_params(cls=None, /, ignore_check_names: list[str] | None =
 
 class DataclassRunner:
     def __init__(
-        self, app, callback: Callable[[BaseConfig], Any], name: str = None
+        self, app, callback: Callable[[BaseConfig], Any], name: str | None = None
     ) -> None:
         assert hasattr(
             app, "command"

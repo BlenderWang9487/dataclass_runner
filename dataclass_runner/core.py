@@ -9,8 +9,26 @@ class BaseConfig:
     def from_config(cls, args_dict: Union[dict, "BaseConfig"]):
         if isinstance(args_dict, BaseConfig):
             args_dict = args_dict.__dict__
-        params = inspect.signature(cls).parameters
-        return cls(**{k: v for k, v in args_dict.items() if k in params})
+
+        # that might be some fields that are not initialized in the __init__ function
+        # (like dataclass' field with (init=False))
+        # so we need not to pass them to the __init__ function
+        # and assign them after the instance is created
+        init_params = set(inspect.signature(cls).parameters.keys())
+        if dataclasses.is_dataclass(cls):
+            all_params = set(f.name for f in dataclasses.fields(cls))
+        else:  # if the class is not a dataclass, like just a normal class with __init__ function
+            all_params = init_params
+        params_for_manual_assign = all_params - init_params
+
+        # so now `all_params` are all the fields that we want to assign to the instance
+        # some are in the __init__ function (`init_params`),
+        # some need to be assigned after the instance is created (`params_for_manual_assign`)
+        instance = cls(**{k: v for k, v in args_dict.items() if k in init_params})
+        for k in params_for_manual_assign:
+            if k in args_dict:
+                setattr(instance, k, args_dict[k])
+        return instance
 
 
 runner_dataclass = dataclasses.dataclass(kw_only=True)
@@ -61,9 +79,6 @@ class DataclassRunner:
         @dataclasses.dataclass
         class BindType(runner_type):  # type: ignore
             def __post_init__(bind_self):
-                parent = super()
-                if hasattr(parent, "__post_init__"):
-                    parent.__post_init__()
                 self._callback(runner_type.from_config(bind_self))
 
         self._app.command(name=self._name)(BindType)

@@ -68,7 +68,7 @@ class DataclassRunner:
         self._app = app
         self._callback = callback
         if name is None:
-            name = callback.__name__
+            name = callback.__name__.lower().replace("_", "-")
         self._name = name
 
     def __call__(self, runner_type):
